@@ -39,7 +39,9 @@ BuildRequires:  webkit2gtk4.1-devel
 BuildRequires:  libmspack-devel
 BuildRequires:  libsecret-devel
 BuildRequires:  mesa-libGLU-devel
-BuildRequires:  mesa-libOSMesa-devel
+# Renamed on Fedora 44: upstream's linux.d/fedora list says mesa-libOSMesa-devel,
+# but Mesa split the classic OSMesa implementation into a separate compat package.
+BuildRequires:  mesa-compat-libOSMesa-devel
 BuildRequires:  mesa-libGL-devel
 BuildRequires:  openssl-devel
 BuildRequires:  wayland-devel
