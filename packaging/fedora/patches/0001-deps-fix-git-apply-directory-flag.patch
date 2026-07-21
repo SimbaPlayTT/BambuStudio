@@ -1,0 +1,49 @@
+diff --git a/deps/OCCT/OCCT.cmake b/deps/OCCT/OCCT.cmake
+index 7afaa8bf2..c8eda544d 100644
+--- a/deps/OCCT/OCCT.cmake
++++ b/deps/OCCT/OCCT.cmake
+@@ -4,14 +4,16 @@ else()
+     set(library_build_type "Static")
+ endif()
+ 
+-if (BINARY_DIR_REL)
+-    set(OCCT_DIRECTORY_FLAG --directory ${BINARY_DIR_REL}/dep_OCCT-prefix/src/dep_OCCT)
+-endif ()
++# NOTE(fedora-packaging): upstream computes a `git apply --directory <relative-path>`
++# flag here from a CMake-derived relative path (BINARY_DIR_REL, deps/CMakeLists.txt).
++# This breaks `git apply` on Fedora with modern git (confirmed against git 2.55.0) —
++# see upstream issue bambulab/BambuStudio#4689. The patch applies cleanly without it,
++# directly in the ExternalProject's own source checkout, so we drop the flag entirely.
+ 
+ bambustudio_add_cmake_project(OCCT
+     URL https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_6_0.zip
+     URL_HASH SHA256=28334f0e98f1b1629799783e9b4d21e05349d89e695809d7e6dfa45ea43e1dbc
+-    PATCH_COMMAND git apply ${OCCT_DIRECTORY_FLAG} --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-OCCT-fix.patch
++    PATCH_COMMAND git apply --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-OCCT-fix.patch
+     #DEPENDS dep_Boost
+     #DEPENDS dep_FREETYPE
+     CMAKE_ARGS
+diff --git a/deps/OpenCV/OpenCV.cmake b/deps/OpenCV/OpenCV.cmake
+index 8ee91434a..8526c9be9 100644
+--- a/deps/OpenCV/OpenCV.cmake
++++ b/deps/OpenCV/OpenCV.cmake
+@@ -40,15 +40,15 @@ else ()
+     set(_use_IPP "-DWITH_IPP=OFF")
+ endif ()
+ 
+-if (BINARY_DIR_REL)
+-    set(OpenCV_DIRECTORY_FLAG --directory ${BINARY_DIR_REL}/dep_OpenCV-prefix/src/dep_OpenCV)
+-endif ()
++# NOTE(fedora-packaging): see the matching note in deps/OCCT/OCCT.cmake — dropping
++# the CMake-derived `git apply --directory` flag here too, for the same reason
++# (upstream issue bambulab/BambuStudio#4689).
+ 
+ message(STATUS "opencv: _use_IPP is ${_use_IPP}")
+ bambustudio_add_cmake_project(OpenCV
+     URL https://github.com/opencv/opencv/archive/refs/tags/4.6.0.tar.gz
+     URL_HASH SHA256=1ec1cba65f9f20fe5a41fda1586e01c70ea0c9a6d7b67c9e13edf0cfe2239277
+-    PATCH_COMMAND git apply ${OpenCV_DIRECTORY_FLAG} --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-OpenCV-fix.patch ${CMAKE_CURRENT_LIST_DIR}/0002-clang19-macos.patch
++    PATCH_COMMAND git apply --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-OpenCV-fix.patch ${CMAKE_CURRENT_LIST_DIR}/0002-clang19-macos.patch
+     CMAKE_ARGS
+     -DBUILD_SHARED_LIBS=0
+        -DBUILD_PERE_TESTS=OFF
