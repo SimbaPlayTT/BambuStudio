@@ -1,0 +1,66 @@
+name: Notify on new upstream BambuStudio release
+
+# Checks bambulab/BambuStudio for tags newer than the one this fork's Fedora
+# packaging currently targets (packaging/fedora/bambu-studio.spec's Version
+# field), and opens an issue if one exists. Deliberately does NOT auto-bump
+# the spec, auto-build, or auto-publish to COPR: the OCCT/OpenCV patch
+# (packaging/fedora/patches/0001-...) may not apply cleanly to a new tag
+# (`--fuzz=0`), and shipping a new compiled binary to users without a human
+# glance first is the wrong default for something this heavy to rebuild.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # daily
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare latest upstream tag to packaged version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          packaged_version=$(grep -oP '^Version:\s*\K\S+' packaging/fedora/bambu-studio.spec)
+          echo "Currently packaged: v${packaged_version}"
+
+          latest_tag=$(gh api repos/bambulab/BambuStudio/tags --jq '.[0].name')
+          echo "Latest upstream tag: ${latest_tag}"
+
+          if [ "${latest_tag}" = "v${packaged_version}" ]; then
+            echo "Up to date, nothing to do."
+            exit 0
+          fi
+
+          # Avoid opening duplicate issues for the same tag.
+          existing=$(gh issue list --state open --search "in:title \"${latest_tag}\"" --json number --jq 'length')
+          if [ "${existing}" != "0" ]; then
+            echo "An issue for ${latest_tag} already exists, skipping."
+            exit 0
+          fi
+
+          gh issue create \
+            --title "Upstream released ${latest_tag} (packaged: v${packaged_version})" \
+            --body "$(cat <<EOF
+bambulab/BambuStudio published **${latest_tag}**, newer than the version this
+fork's Fedora packaging currently targets (v${packaged_version}).
+
+To bump:
+1. \`git fetch upstream --tags && git checkout -b fedora-packaging-${latest_tag} ${latest_tag}\`
+2. Re-check whether \`packaging/fedora/patches/0001-deps-fix-git-apply-directory-flag.patch\`
+   still applies cleanly (\`git apply --check --fuzz=0\`) against the new tag's
+   \`deps/OCCT/OCCT.cmake\` / \`deps/OpenCV/OpenCV.cmake\` — upstream issue #4689
+   may have been fixed by then, in which case the patch can be dropped.
+3. Bump \`Version:\` (and reset \`Release:\` to 1) in \`packaging/fedora/bambu-studio.spec\`.
+4. Rebuild locally with mock (see \`packaging/fedora/README.md\`) before pushing a tag
+   that triggers \`build-copr.yml\`.
+EOF
+)"

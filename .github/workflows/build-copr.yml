@@ -1,0 +1,56 @@
+name: Build SRPM and submit to COPR
+
+# Triggered by pushing a tag like `fedora-v02.07.01.62-1` (packaging tags,
+# distinct from upstream's own `vX.Y.Z.W` tags). Produces an SRPM and hands it
+# to COPR, which does the actual multi-hour compile on its own builders — this
+# job stays lightweight despite the heavy underlying build.
+#
+# Requires a repo secret `COPR_API_CONFIG` containing the contents of a
+# `~/.config/copr` ini file (obtained from https://copr.fedorainfracloud.org/api/
+# after logging in with a Fedora Account System account).
+
+on:
+  push:
+    tags:
+      - 'fedora-v*'
+  workflow_dispatch: {}
+
+jobs:
+  build-and-submit:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/fedora/fedora:44
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build tooling
+        run: dnf install -y rpmdevtools rpm-build copr-cli
+
+      - name: Configure COPR credentials
+        run: |
+          mkdir -p ~/.config
+          printf '%s' "${{ secrets.COPR_API_CONFIG }}" > ~/.config/copr
+          chmod 600 ~/.config/copr
+
+      - name: Fetch Source0 into the rpmbuild sources dir
+        run: |
+          set -euo pipefail
+          rpmdev-setuptree
+          spectool -g -R --sourcedir packaging/fedora/bambu-studio.spec \
+            --define "_sourcedir $HOME/rpmbuild/SOURCES"
+          cp packaging/fedora/patches/*.patch "$HOME/rpmbuild/SOURCES/"
+
+      - name: Build SRPM
+        run: |
+          rpmbuild -bs packaging/fedora/bambu-studio.spec \
+            --define "_sourcedir $HOME/rpmbuild/SOURCES" \
+            --define "_srcrpmdir $HOME/rpmbuild/SRPMS"
+
+      - name: Submit to COPR (blocking)
+        run: |
+          set -euo pipefail
+          srpm=$(ls "$HOME"/rpmbuild/SRPMS/*.src.rpm)
+          echo "Submitting ${srpm}"
+          copr-cli build SimbaPlayTT/bambu-studio "${srpm}"
